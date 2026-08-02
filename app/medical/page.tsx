@@ -22,6 +22,13 @@ export default function MedicalPage() {
   const [result, setResult] = useState("");
   const [error, setError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [copied, setCopied] = useState(false);
+
+  const copyResult = () => {
+    navigator.clipboard?.writeText(result).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const subType = `${contentType}_${targetApp}`;
 
@@ -121,7 +128,15 @@ export default function MedicalPage() {
 
         {result && (
           <div className="rounded-xl bg-white border-2 border-ink p-4">
-            <div className="text-xs font-bold text-gray-500 mb-2">生成結果</div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-xs font-bold text-gray-500">生成結果</div>
+              <button
+                onClick={copyResult}
+                className="text-xs font-bold px-3 py-1.5 rounded-lg bg-ink text-white"
+              >
+                {copied ? "✓ コピー済み" : "コピー"}
+              </button>
+            </div>
             <div className="text-sm whitespace-pre-wrap">{result}</div>
           </div>
         )}
