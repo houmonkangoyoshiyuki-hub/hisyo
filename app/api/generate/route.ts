@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { buildMedicalSystemPrompt, buildNovelSystemPrompt, buildThumbnailPrompt, buildCharacterPostPrompt } from "@/lib/prompts";
+import { buildMedicalSystemPrompt, buildNovelSystemPrompt, buildThumbnailPrompt, buildCharacterPostPrompt, buildAllCategoriesPrompt } from "@/lib/prompts";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -18,10 +18,11 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { mode } = body; // "medical" | "novel" | "thumbnail" | "character"
+    const { mode } = body; // "medical" | "novel" | "thumbnail" | "character" | "character_all"
 
     let systemPrompt = "";
     let userMessage = "";
+    let maxTokens = 2000;
 
     if (mode === "medical") {
       const { contentType, targetApp, task, recentPosts } = body;
@@ -39,6 +40,11 @@ export async function POST(req: NextRequest) {
       const { category, recentPosts } = body;
       systemPrompt = buildCharacterPostPrompt({ category, recentPosts: recentPosts || [] });
       userMessage = `「${category}」カテゴリの投稿を1本作成してください。`;
+    } else if (mode === "character_all") {
+      const { recentByCategory } = body; // { 現場: string[], 育児: string[], 豆知識: string[], 当事者へ: string[] }
+      systemPrompt = buildAllCategoriesPrompt(recentByCategory || {});
+      userMessage = "4カテゴリすべての投稿を、指定の出力形式で作成してください。";
+      maxTokens = 2500;
     } else {
       return NextResponse.json({ error: "不正なmodeです" }, { status: 400 });
     }
@@ -52,7 +58,7 @@ export async function POST(req: NextRequest) {
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-5",
-        max_tokens: 2000,
+        max_tokens: maxTokens,
         system: systemPrompt,
         messages: [{ role: "user", content: userMessage }],
       }),
