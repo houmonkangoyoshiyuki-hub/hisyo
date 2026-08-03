@@ -1,6 +1,6 @@
 export type HistoryEntry = {
   id: number;
-  category: "medical" | "novel" | "research";
+  category: "medical" | "novel" | "research" | "character";
   subType: string; // 例: "x_ケアラボ", "novel_続きを書く", "research_weekly"
   content: string;
   favorite: boolean;
