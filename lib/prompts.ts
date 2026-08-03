@@ -385,9 +385,9 @@ ${avoidRepeatBlocks}
 
 export const MEDICAL_APPS_CONTEXT = `
 ## 対象アプリ
-1. ケアラボ（nursing-assistant）：看護師・介護士向け、患者経過追跡・多職種向けAI業務支援アプリ。個人契約2,500円/月＋API実費。
-2. Dr.Assistant（doctor-assistant）：医師向け、臨床推論支援・文書作成・引き継ぎ支援アプリ。個人契約2,500円/月＋API実費。
-3. メディノート（niwa-nurse-reference）：看護師・看護学生向け、現場のポケット辞典＋AI相談アプリ。個人契約980円/月＋API実費。
+1. ケアラボ（nursing-assistant）：看護師・介護士向け、患者経過追跡・多職種向けAI業務支援アプリ。個人契約2,500円/月＋API実費。URL: https://nursing-assistant-tau.vercel.app
+2. Dr.Assistant（doctor-assistant）：医師向け、臨床推論支援・文書作成・引き継ぎ支援アプリ。個人契約2,500円/月＋API実費。URL: https://doctor-assistant-beta.vercel.app
+3. メディノート（niwa-nurse-reference）：看護師・看護学生向け、現場のポケット辞典＋AI相談アプリ。個人契約980円/月＋API実費。URL: https://niwa-nurse-reference.vercel.app
 
 ## ターゲット層
 介護士・看護師・施設関係者・医師。現場の「困りごと」に直結する言葉で刺さる（抽象的な機能紹介より「あるある→解決」の形が効く）。
@@ -396,7 +396,18 @@ export const MEDICAL_APPS_CONTEXT = `
 - 専門性は保ちつつ、上から目線にならない（同業者としての実体験ベースの語り口）
 - 「機能を並べる」のではなく「あるある共感→こう解決できる」の順で書く
 - 医療広告・薬機法に抵触するような断定的な効能表現は避ける（「治る」「必ず改善する」等は禁止）
+
+## リンクの扱い（重要、プラットフォームごとに変える）
+- X・Threads：本文中にURLを直接書かない。外部リンクを含めるとアルゴリズム上リーチが下がるため。
+  代わりに「気になる方はプロフィールへ」「詳しくはプロフのリンクから」のような一文で締める。
+- note記事：該当アプリの実際のURLを、記事の最後に明記する（読者が実際に使うために必要な情報のため）。
 `;
+
+const APP_URLS: Record<string, string> = {
+  ケアラボ: "https://nursing-assistant-tau.vercel.app",
+  "Dr.Assistant": "https://doctor-assistant-beta.vercel.app",
+  メディノート: "https://niwa-nurse-reference.vercel.app",
+};
 
 export function buildMedicalSystemPrompt(params: {
   contentType: "x" | "threads" | "note";
@@ -406,10 +417,10 @@ export function buildMedicalSystemPrompt(params: {
   const { contentType, targetApp, recentPosts } = params;
   const platformNote =
     contentType === "x"
-      ? "X（旧Twitter）向け。140字前後、共感を呼ぶ短文。ハッシュタグは2〜3個を末尾に。"
+      ? "X（旧Twitter）向け。140字前後、共感を呼ぶ短文。ハッシュタグは2〜3個を末尾に。本文にURLは書かず「気になる方はプロフィールへ」で締める。"
       : contentType === "threads"
-      ? "Threads向け。X より少し長め・カジュアルな会話調でもOK。"
-      : "note記事向け。見出し付きの中〜長文（800〜1500字程度）。医療Tips記事として、読者の実務に役立つ内容にする。";
+      ? "Threads向け。X より少し長め・カジュアルな会話調でもOK。本文にURLは書かず「気になる方はプロフィールへ」で締める。"
+      : `note記事向け。見出し付きの中〜長文（800〜1500字程度）。医療Tips記事として、読者の実務に役立つ内容にする。記事の最後に必ずこのURLを明記する: ${APP_URLS[targetApp] || ""}`;
 
   const avoidRepeat =
     recentPosts.length > 0
@@ -430,6 +441,54 @@ ${platformNote}
 ${avoidRepeat}
 
 見出しや前置きは不要。本文のみをそのまま出力してください（コピペしてすぐ投稿できる形式）。`;
+}
+
+// 3アプリ分を1回のAPI呼び出しでまとめて生成する（個別に呼ぶより低コスト）
+export function buildAllAppsMedicalPrompt(params: {
+  contentType: "x" | "threads" | "note";
+  recentByApp: Record<string, string[]>;
+}): string {
+  const { contentType, recentByApp } = params;
+  const apps = ["ケアラボ", "Dr.Assistant", "メディノート"];
+
+  const platformNote =
+    contentType === "x"
+      ? "X（旧Twitter）向け。140字前後、共感を呼ぶ短文。ハッシュタグは2〜3個を末尾に。本文にURLは書かず「気になる方はプロフィールへ」で締める。"
+      : contentType === "threads"
+      ? "Threads向け。X より少し長め・カジュアルな会話調でもOK。本文にURLは書かず「気になる方はプロフィールへ」で締める。"
+      : "note記事向け。見出し付きの中〜長文（800〜1200字程度）。医療Tips記事として、読者の実務に役立つ内容にする。記事の最後に必ず該当アプリのURLを明記する（URLはアプリごとにMEDICAL_APPS_CONTEXTの記載を参照）。";
+
+  const avoidRepeatBlocks = apps
+    .map((app) => {
+      const recent = recentByApp[app] || [];
+      if (recent.length === 0) return "";
+      return `\n【${app}の直近投稿（被らないように）】\n${recent.map((p, i) => `${i + 1}. ${p}`).join("\n")}`;
+    })
+    .join("\n");
+
+  return `あなたは医療・介護職向けアプリのマーケティング担当として、SNS投稿・note記事を作成するプロのコピーライターです。
+
+${MEDICAL_APPS_CONTEXT}
+
+## 依頼内容
+以下の3アプリすべての${contentType === "note" ? "note記事" : contentType === "x" ? "X投稿" : "Threads投稿"}を、1本ずつ作成してください。
+${platformNote}
+${avoidRepeatBlocks}
+
+## 出力形式（この形式を厳守。他の文言は一切書かないこと）
+【ケアラボ】
+（本文のみ）
+
+【Dr.Assistant】
+（本文のみ）
+
+【メディノート】
+（本文のみ）
+
+## 厳守事項
+- 3本とも、見出しラベル以外に前置き・説明・まとめは一切書かないこと
+- 3本それぞれの切り口が被らないようにすること
+- ${contentType === "note" ? "note記事の場合、各アプリのURLを必ずその記事の最後に入れること" : "X/Threadsの場合、本文にURLを書かず「気になる方はプロフィールへ」等で締めること"}`;
 }
 
 // ─────────────────────────────────────────────
