@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { buildMedicalSystemPrompt, buildNovelSystemPrompt, buildThumbnailPrompt, buildCharacterPostPrompt, buildAllCategoriesPrompt } from "@/lib/prompts";
+import { buildMedicalSystemPrompt, buildNovelSystemPrompt, buildThumbnailPrompt, buildCharacterPostPrompt, buildAllCategoriesPrompt, buildAllAppsMedicalPrompt } from "@/lib/prompts";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -45,6 +45,11 @@ export async function POST(req: NextRequest) {
       systemPrompt = buildAllCategoriesPrompt(recentByCategory || {});
       userMessage = "4カテゴリすべての投稿を、指定の出力形式で作成してください。";
       maxTokens = 2500;
+    } else if (mode === "medical_all") {
+      const { contentType, recentByApp } = body; // recentByApp: { ケアラボ: string[], "Dr.Assistant": string[], メディノート: string[] }
+      systemPrompt = buildAllAppsMedicalPrompt({ contentType, recentByApp: recentByApp || {} });
+      userMessage = "3アプリすべての投稿を、指定の出力形式で作成してください。";
+      maxTokens = contentType === "note" ? 4000 : 2000;
     } else {
       return NextResponse.json({ error: "不正なmodeです" }, { status: 400 });
     }
