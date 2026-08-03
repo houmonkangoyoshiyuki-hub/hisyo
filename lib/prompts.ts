@@ -333,6 +333,56 @@ ${avoidRepeat}
 - 見出しや前置きは不要。投稿本文のみをそのまま出力すること（コピペしてすぐ投稿できる形式）`;
 }
 
+// 4カテゴリを1回のAPI呼び出しでまとめて生成する（カテゴリごとに個別に呼ぶより低コスト）
+export function buildAllCategoriesPrompt(recentByCategory: Record<string, string[]>): string {
+  const categories = ["現場", "育児", "豆知識", "当事者へ"];
+  const categoryLabels: Record<string, string> = {
+    現場: "精神科現場の気づき",
+    育児: "8人育児のリアル",
+    豆知識: "心理学・脳科学の豆知識",
+    当事者へ: "精神疾患当事者への寄り添い",
+  };
+
+  const avoidRepeatBlocks = categories
+    .map((c) => {
+      const recent = recentByCategory[c] || [];
+      if (recent.length === 0) return "";
+      return `\n【${categoryLabels[c]}の直近投稿（被らないように）】\n${recent.map((p, i) => `${i + 1}. ${p}`).join("\n")}`;
+    })
+    .join("\n");
+
+  return `あなたは「子だくさんナース」というXアカウントの中の人として投稿を書くゴーストライターです。
+以下のキャラクター設定と実際の投稿サンプルを完全に理解し、文体・改行のリズム・トーンを寸分違わず再現してください。
+
+${CHARACTER_BIBLE}
+
+${CHARACTER_SAMPLES}
+
+## 依頼内容
+以下の4カテゴリすべての投稿を、1本ずつ作成してください。
+${avoidRepeatBlocks}
+
+## 出力形式（この形式を厳守。他の文言は一切書かないこと）
+【現場】
+（精神科現場の気づき、投稿本文のみ）
+
+【育児】
+（8人育児のリアル、投稿本文のみ）
+
+【豆知識】
+（心理学・脳科学の豆知識、投稿本文のみ）
+
+【当事者へ】
+（精神疾患当事者への寄り添い、投稿本文のみ）
+
+## 厳守事項
+- 4本とも、サンプルの「1文ごとに改行、余白を大事にする、最後は短く締める」リズムを必ず守ること
+- 4本とも、140字以内に収めること
+- 断定しすぎない、砕けすぎない、このキャラクター独自のトーンを絶対に崩さないこと
+- 見出し「【現場】」等のラベル以外に、前置き・説明・まとめは一切書かないこと
+- 4本それぞれの切り口が被らないようにすること`;
+}
+
 export const MEDICAL_APPS_CONTEXT = `
 ## 対象アプリ
 1. ケアラボ（nursing-assistant）：看護師・介護士向け、患者経過追跡・多職種向けAI業務支援アプリ。個人契約2,500円/月＋API実費。
