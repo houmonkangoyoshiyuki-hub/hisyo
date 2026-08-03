@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { buildMedicalSystemPrompt, buildNovelSystemPrompt, buildThumbnailPrompt } from "@/lib/prompts";
+import { buildMedicalSystemPrompt, buildNovelSystemPrompt, buildThumbnailPrompt, buildCharacterPostPrompt } from "@/lib/prompts";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { mode } = body; // "medical" | "novel" | "thumbnail"
+    const { mode } = body; // "medical" | "novel" | "thumbnail" | "character"
 
     let systemPrompt = "";
     let userMessage = "";
@@ -35,6 +35,10 @@ export async function POST(req: NextRequest) {
       const { task } = body;
       systemPrompt = buildThumbnailPrompt(task || "サムネイル画像のプロンプトを作成してください。");
       userMessage = task || "サムネイル画像のプロンプトを作成してください。";
+    } else if (mode === "character") {
+      const { category, recentPosts } = body;
+      systemPrompt = buildCharacterPostPrompt({ category, recentPosts: recentPosts || [] });
+      userMessage = `「${category}」カテゴリの投稿を1本作成してください。`;
     } else {
       return NextResponse.json({ error: "不正なmodeです" }, { status: 400 });
     }
