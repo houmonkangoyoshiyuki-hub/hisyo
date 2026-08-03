@@ -5,7 +5,7 @@ import Link from "next/link";
 import PasswordGate from "@/components/PasswordGate";
 import GenerateButton from "@/components/GenerateButton";
 import HistoryPanel from "@/components/HistoryPanel";
-import { saveHistoryEntry, getRecentBySubType, getFavoritesBySubType } from "@/lib/storage";
+import { saveHistoryEntry, getRecentBySubType } from "@/lib/storage";
 
 const APPS = ["ケアラボ", "Dr.Assistant", "メディノート"];
 const CONTENT_TYPES: { key: "x" | "threads" | "note"; label: string }[] = [
@@ -16,53 +16,62 @@ const CONTENT_TYPES: { key: "x" | "threads" | "note"; label: string }[] = [
 
 export default function MedicalPage() {
   const [password, setPassword] = useState("");
-  const [targetApp, setTargetApp] = useState(APPS[0]);
   const [contentType, setContentType] = useState<"x" | "threads" | "note">("x");
-  const [theme, setTheme] = useState("");
-  const [result, setResult] = useState("");
+  const [results, setResults] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
-  const [copied, setCopied] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  const copyResult = () => {
-    navigator.clipboard?.writeText(result).catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const copyOne = (key: string, text: string) => {
+    navigator.clipboard?.writeText(text).catch(() => {});
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  const subType = `${contentType}_${targetApp}`;
+  // AIの出力を【ケアラボ】【Dr.Assistant】【メディノート】の3ブロックにパースする
+  const parseResult = (text: string): Record<string, string> => {
+    const parsed: Record<string, string> = {};
+    for (let i = 0; i < APPS.length; i++) {
+      const app = APPS[i];
+      const nextApp = APPS[i + 1];
+      const startMarker = `【${app}】`;
+      const startIdx = text.indexOf(startMarker);
+      if (startIdx === -1) continue;
+      const contentStart = startIdx + startMarker.length;
+      const endIdx = nextApp ? text.indexOf(`【${nextApp}】`, contentStart) : text.length;
+      const content = text.slice(contentStart, endIdx === -1 ? text.length : endIdx).trim();
+      parsed[app] = content;
+    }
+    return parsed;
+  };
 
-  const generate = async () => {
+  const generateAll = async () => {
     setError("");
-    setResult("");
+    setResults({});
     try {
-      const recentPosts = getRecentBySubType(subType, 10);
-      const favorites = getFavoritesBySubType(subType, 5);
-      const favNote =
-        favorites.length > 0
-          ? `\n\n過去に好評だった投稿例（テイストを参考にしてください）：\n${favorites.join("\n---\n")}`
-          : "";
+      const recentByApp: Record<string, string[]> = {};
+      for (const app of APPS) {
+        recentByApp[app] = getRecentBySubType(`${contentType}_${app}`, 5);
+      }
 
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-dashboard-password": password },
-        body: JSON.stringify({
-          mode: "medical",
-          contentType,
-          targetApp,
-          recentPosts,
-          task: `${targetApp}についての投稿を1本作成してください。${
-            theme ? `テーマ・切り口の希望：${theme}` : "テーマは自由に、現場のあるあるから考えてください。"
-          }${favNote}`,
-        }),
+        body: JSON.stringify({ mode: "medical_all", contentType, recentByApp }),
       });
       const data = await res.json();
       if (data.error) {
         setError(data.error);
         return;
       }
-      setResult(data.text);
-      saveHistoryEntry({ category: "medical", subType, content: data.text });
+      const parsed = parseResult(data.text);
+      setResults(parsed);
+
+      for (const app of APPS) {
+        if (parsed[app]) {
+          saveHistoryEntry({ category: "medical", subType: `${contentType}_${app}`, content: parsed[app] });
+        }
+      }
       setRefreshKey((k) => k + 1);
     } catch (e: any) {
       setError(e?.message || "エラーが発生しました");
@@ -76,25 +85,11 @@ export default function MedicalPage() {
           <Link href="/" className="text-sm text-gray-400">← 戻る</Link>
         </div>
         <h1 className="text-xl font-bold">🩺 医療系営業・マーケティング</h1>
+        <div className="text-xs text-gray-400">
+          ボタン1つで、ケアラボ・Dr.Assistant・メディノート、3アプリ分をまとめて作成します。
+        </div>
 
         <div className="rounded-xl bg-white border border-gray-200 p-4 space-y-4">
-          <div>
-            <div className="text-xs font-bold text-gray-500 mb-1.5">対象アプリ</div>
-            <div className="flex gap-2">
-              {APPS.map((a) => (
-                <button
-                  key={a}
-                  onClick={() => setTargetApp(a)}
-                  className={`flex-1 py-2 rounded-lg text-xs font-bold ${
-                    targetApp === a ? "bg-ink text-white" : "bg-gray-100 text-gray-500"
-                  }`}
-                >
-                  {a}
-                </button>
-              ))}
-            </div>
-          </div>
-
           <div>
             <div className="text-xs font-bold text-gray-500 mb-1.5">コンテンツ種別</div>
             <div className="flex gap-2">
@@ -110,34 +105,37 @@ export default function MedicalPage() {
                 </button>
               ))}
             </div>
-          </div>
-
-          <div>
-            <div className="text-xs font-bold text-gray-500 mb-1.5">テーマ・切り口（任意）</div>
-            <input
-              value={theme}
-              onChange={(e) => setTheme(e.target.value)}
-              placeholder="例: 夜勤の申し送りがいつも長引く問題"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-            />
+            {contentType !== "note" && (
+              <div className="text-xs text-gray-400 mt-1.5">
+                X/Threadsはリンク無しで「気になる方はプロフィールへ」で締める形にしています。
+              </div>
+            )}
           </div>
 
           {error && <div className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</div>}
-          <GenerateButton label="✨ 生成する" onGenerate={generate} />
+          <GenerateButton label="✨ 3アプリまとめて生成する" onGenerate={generateAll} />
         </div>
 
-        {result && (
-          <div className="rounded-xl bg-white border-2 border-ink p-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-xs font-bold text-gray-500">生成結果</div>
-              <button
-                onClick={copyResult}
-                className="text-xs font-bold px-3 py-1.5 rounded-lg bg-ink text-white"
-              >
-                {copied ? "✓ コピー済み" : "コピー"}
-              </button>
-            </div>
-            <div className="text-sm whitespace-pre-wrap">{result}</div>
+        {Object.keys(results).length > 0 && (
+          <div className="space-y-3">
+            {APPS.map((app) => {
+              const text = results[app];
+              if (!text) return null;
+              return (
+                <div key={app} className="rounded-xl bg-white border-2 border-ink p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-xs font-bold text-gray-500">{app}</div>
+                    <button
+                      onClick={() => copyOne(app, text)}
+                      className="text-xs font-bold px-3 py-1.5 rounded-lg bg-ink text-white"
+                    >
+                      {copiedKey === app ? "✓ コピー済み" : "コピー"}
+                    </button>
+                  </div>
+                  <div className="text-sm whitespace-pre-wrap">{text}</div>
+                </div>
+              );
+            })}
           </div>
         )}
 
