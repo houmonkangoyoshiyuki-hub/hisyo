@@ -5,7 +5,7 @@ import Link from "next/link";
 const WEEKDAY_JP = ["日", "月", "火", "水", "木", "金", "土"];
 
 // 曜日ごとのおすすめタスク（小説の設定資料にあったSNS運用設計を踏襲）
-function getTodayTasks(day: number) {
+function getTodayTasks(day: number, hour: number) {
   // day: 0=日 ... 6=土
   const tasks: { label: string; href: string; note: string }[] = [];
 
@@ -22,6 +22,13 @@ function getTodayTasks(day: number) {
     tasks.push({ label: "🩺 Threadsの投稿を作る", href: "/medical", note: "問いかけ・エンゲージメント重視の曜日です" });
   }
 
+  // 子だくさんナースの投稿は毎日。時間帯に応じてカテゴリを提案する
+  const charNote =
+    hour < 11 ? "朝は「精神科現場の気づき」がおすすめです" :
+    hour < 16 ? "昼は「8人育児のリアル」がおすすめです" :
+    "夕方以降は「心理学・脳科学の豆知識」がおすすめです";
+  tasks.push({ label: "👨‍👩‍👧‍👦 子だくさんナースの投稿を作る", href: "/character", note: charNote });
+
   // 小説は毎日「続きを書く」候補として出す
   tasks.push({ label: "📖 小説の続きを書く", href: "/novel", note: "少しずつでも積み上げましょう" });
 
@@ -36,7 +43,8 @@ function getTodayTasks(day: number) {
 export default function HomePage() {
   const now = new Date();
   const day = now.getDay();
-  const tasks = getTodayTasks(day);
+  const hour = now.getHours();
+  const tasks = getTodayTasks(day, hour);
   const dateStr = `${now.getMonth() + 1}月${now.getDate()}日（${WEEKDAY_JP[day]}）`;
 
   return (
@@ -63,10 +71,14 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="grid grid-cols-3 gap-2 pt-2">
+      <section className="grid grid-cols-2 gap-2 pt-2">
         <Link href="/medical" className="rounded-xl bg-white border border-gray-200 py-4 text-center">
           <div className="text-2xl mb-1">🩺</div>
           <div className="text-xs font-bold">医療系営業</div>
+        </Link>
+        <Link href="/character" className="rounded-xl bg-white border border-gray-200 py-4 text-center">
+          <div className="text-2xl mb-1">👨‍👩‍👧‍👦</div>
+          <div className="text-xs font-bold">子だくさんナース</div>
         </Link>
         <Link href="/novel" className="rounded-xl bg-white border border-gray-200 py-4 text-center">
           <div className="text-2xl mb-1">📖</div>
